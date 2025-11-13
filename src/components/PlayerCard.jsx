@@ -92,7 +92,7 @@ export function PlayerCard({
         <div className="flex-1 min-w-0">
           {/* 用户名 */}
           <h3 className={cn(
-            'font-bold truncate',
+            'font-bold truncate text-black',
             size === 'sm' ? 'text-sm' : size === 'md' ? 'text-base' : 'text-lg'
           )}>
             {player.username}

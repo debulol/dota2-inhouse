@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  body {
+    @apply text-gray-800;  /* 👈 设置默认字体颜色为深灰色 */
+    @apply bg-gray-50;     /* 背景颜色（可选） */
+  }
+}
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;

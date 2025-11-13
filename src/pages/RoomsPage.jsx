@@ -135,8 +135,8 @@ export function RoomsPage() {
               <ArrowLeft className="w-6 h-6" />
             </button>
             <div>
-              <h1 className="text-3xl font-bold">房间列表</h1>
-              <p className="text-gray-600 mt-1">当前玩家: {currentPlayer.username}</p>
+              <h1 className="text-3xl font-bold text-gray-900">房间列表</h1>
+              <p className="text-gray-900">当前玩家: {currentPlayer.username}</p>
             </div>
           </div>
 
@@ -151,7 +151,7 @@ export function RoomsPage() {
 
         {/* 快速加入 */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-900">
             <Search className="w-5 h-5" />
             快速加入
           </h2>
@@ -206,9 +206,9 @@ export function RoomsPage() {
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
-            <h2 className="text-2xl font-bold mb-6">创建新房间</h2>
+            <h2 className="text-2xl font-bold mb-6 text-gray-900">创建新房间</h2>
             <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2 text-gray-900">
                 房间名称（可选）
               </label>
               <input

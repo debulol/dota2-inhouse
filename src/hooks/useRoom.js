@@ -181,25 +181,39 @@ export function useJoinRoom() {
  */
 export function useLeaveRoom() {
   const [loading, setLoading] = useState(false)
+  const { showToast } = useStore()
 
-  const leaveRoom = useCallback(async (roomId, playerId) => {
-    setLoading(true)
-
-    try {
-      const { error } = await supabase.rpc('leave_room', {
-        p_room_id: roomId,
-        p_player_id: playerId
-      })
-
-      if (error) throw error
-      return true
-    } catch (err) {
-      console.error('Leave room error:', err)
+  const leaveRoom = async (roomId, playerId) => {
+    if (!roomId || !playerId) {
+      showToast('退出房间失败：房间或玩家信息缺失', 'error')
       return false
-    } finally {
-      setLoading(false)
     }
-  }, [])
+
+    setLoading(true)
+    const { data, error } = await supabase.rpc('leave_room', {
+      p_room_id: roomId,
+      p_player_id: playerId,
+    })
+    setLoading(false)
+
+    if (error) {
+      console.error('leave_room error:', error)
+      showToast(`退出房间失败：${error.message}`, 'error')
+      return false
+    }
+
+    // ⚠️ 函数返回 TABLE(success boolean, message text)
+    // Supabase 会返回一个数组：[{ success, message }]
+    const result = Array.isArray(data) ? data[0] : data
+
+    if (!result?.success) {
+      showToast(result?.message || '退出房间失败', 'error')
+      return false
+    }
+
+    showToast(result.message || '已退出房间', 'success')
+    return true
+  }
 
   return { leaveRoom, loading }
 }
