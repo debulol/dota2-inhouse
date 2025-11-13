@@ -99,7 +99,7 @@ export function PlayerCard({
           </h3>
 
           {/* 战绩 */}
-          {showStats && player.stats_visible && (
+          {showStats && (
             <p className="text-xs text-gray-500 mt-1">
               {formatRecord(player.total_wins, player.total_losses)}
             </p>
