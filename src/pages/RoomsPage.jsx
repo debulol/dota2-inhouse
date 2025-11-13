@@ -47,7 +47,7 @@ export function RoomsPage() {
     }
   }, [currentPlayer, navigate])
 
-  const loadRooms = async () => {
+  const loadRooms = async () => { 
     try {
       const { data, error } = await supabase
         .from('rooms')
@@ -55,7 +55,7 @@ export function RoomsPage() {
           *,
           host:players!rooms_host_id_fkey(username)
         `)
-        .lt('expires_at', 'NOW() + interval \'24 hours\'')
+        .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
 
       if (error) throw error
