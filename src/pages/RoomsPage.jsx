@@ -47,7 +47,7 @@ export function RoomsPage() {
     }
   }, [currentPlayer, navigate])
 
-  const loadRooms = async () => { 
+  const loadRooms = async () => {
     try {
       const { data, error } = await supabase
         .from('rooms')

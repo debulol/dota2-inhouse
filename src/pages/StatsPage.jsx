@@ -55,7 +55,7 @@ export function StatsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* 头部 */}
         <div className="bg-white bg-opacity-95 rounded-lg shadow-lg p-6 mb-8">

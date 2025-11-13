@@ -66,7 +66,7 @@ export function GamePage() {
   const isHost = currentRoom.host_id === currentPlayer.id
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-radiant-900 via-gray-900 to-dire-900">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-gray-50 to-red-50">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* 头部 */}
         <div className="bg-white bg-opacity-95 rounded-lg shadow-lg p-6 mb-8 text-center">
