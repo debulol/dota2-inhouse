@@ -197,17 +197,31 @@ export function useLeaveRoom() {
     setLoading(false)
 
     if (error) {
-      console.error('leave_room error:', error)
+      console.error('leave_room error:', error.message, error)
       showToast(`退出房间失败：${error.message}`, 'error')
       return false
     }
 
-    // ⚠️ 函数返回 TABLE(success boolean, message text)
-    // Supabase 会返回一个数组：[{ success, message }]
-    const result = Array.isArray(data) ? data[0] : data
+    console.log('leave_room data:', data)
 
-    if (!result?.success) {
-      showToast(result?.message || '退出房间失败', 'error')
+    // 1）如果后端什么都不返回（data 为 null），但也没有报错，
+    //    我们直接当成“成功退出”
+    if (data == null) {
+      showToast('已退出房间', 'success')
+      return true
+    }
+
+    // 2）如果返回的是 TABLE(success, message)，按之前的方式解析
+    const result = Array.isArray(data) ? data[0] ?? null : data ?? null
+
+    if (!result) {
+      // 理论上不会走到这里，有也当失败处理
+      showToast('退出房间失败：服务器返回异常', 'error')
+      return false
+    }
+
+    if (result.success === false) {
+      showToast(result.message || '退出房间失败', 'error')
       return false
     }
 
@@ -217,6 +231,7 @@ export function useLeaveRoom() {
 
   return { leaveRoom, loading }
 }
+
 
 /**
  * 踢出玩家
