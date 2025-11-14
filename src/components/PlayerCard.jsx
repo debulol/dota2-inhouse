@@ -61,10 +61,12 @@ export function PlayerCard({
         <div className="relative">
           {player.avatar_url ? (
             <img
-              src={player.avatar_url}
-              alt={player.username}
-              className={cn('rounded-full', avatarSizes[size])}
-            />
+              src={`/avatars/${player.avatar_url}`}
+              alt={player.username} 
+              className={cn('rounded-full', avatarSizes[size])} 
+              />
+
+              
           ) : (
             <div className={cn(
               'rounded-full bg-gray-200 flex items-center justify-center',

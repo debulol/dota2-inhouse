@@ -127,7 +127,7 @@ export const HEROES = [
  * 根据英雄ID获取英雄头像URL
  */
 export function getHeroIcon(heroId) {
-  return `/heroes/${heroId}.png`
+  return `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${heroId}.png`
 }
 
 /**
