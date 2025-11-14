@@ -61,7 +61,7 @@ export function PlayerCard({
         <div className="relative">
           {player.avatar_url ? (
             <img
-              src={`/avatars/${player.avatar_url}`}
+              src={player.avatar_url}
               alt={player.username} 
               className={cn('rounded-full', avatarSizes[size])} 
               />

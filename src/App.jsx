@@ -10,7 +10,9 @@ import { GamePage } from './pages/GamePage';
 import { StatsPage } from './pages/StatsPage';
 import { PlayerStatsPage } from './pages/PlayerStatsPage';
 import { Loader2 } from 'lucide-react';
-import { TestRoomPage } from './pages/TestRoomPage'
+import { TestRoomPage } from './pages/TestRoomPage';
+import { AdminPlayersPage } from './pages/AdminPlayersPage';
+import { TestImagePage } from './pages/TestImagePage';
 
 
 /**
@@ -59,7 +61,14 @@ function AppContent() {
         {/* 个人战绩详情 */}
         <Route path="/stats/:playerId" element={<PlayerStatsPage />} />
         
+        {/* 测试页面 */}
         <Route path="/test" element={<TestRoomPage />} />
+        
+        {/* 图片测试页面 */}
+        <Route path="/test/image" element={<TestImagePage />} />
+        
+        {/* 管理员页面 - 玩家管理 */}
+        <Route path="/admin/players" element={<AdminPlayersPage />} />
 
         {/* 默认重定向 */}
         <Route path="*" element={<Navigate to="/" replace />} />
