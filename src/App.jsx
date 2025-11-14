@@ -10,6 +10,8 @@ import { GamePage } from './pages/GamePage';
 import { StatsPage } from './pages/StatsPage';
 import { PlayerStatsPage } from './pages/PlayerStatsPage';
 import { Loader2 } from 'lucide-react';
+import { TestRoomPage } from './pages/TestRoomPage'
+
 
 /**
  * App 内容组件 - 处理状态恢复
@@ -57,6 +59,8 @@ function AppContent() {
         {/* 个人战绩详情 */}
         <Route path="/stats/:playerId" element={<PlayerStatsPage />} />
         
+        <Route path="/test" element={<TestRoomPage />} />
+
         {/* 默认重定向 */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

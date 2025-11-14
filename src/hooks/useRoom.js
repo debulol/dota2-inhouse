@@ -177,7 +177,8 @@ export function useJoinRoom() {
 }
 
 /**
- * 退出房间
+ * 退出房间 - 改进版本
+ * 方案1：直接操作数据库（推荐）
  */
 export function useLeaveRoom() {
   const [loading, setLoading] = useState(false)
@@ -190,51 +191,118 @@ export function useLeaveRoom() {
     }
 
     setLoading(true)
-    const { data, error } = await supabase.rpc('leave_room', {
-      p_room_id: roomId,
-      p_player_id: playerId,
-    })
-    setLoading(false)
+    
+    try {
+      // 方案1：直接删除 room_players 记录（这会触发 Realtime 事件）
+      const { error: deleteError } = await supabase
+        .from('room_players')
+        .delete()
+        .eq('room_id', roomId)
+        .eq('player_id', playerId)
 
-    if (error) {
-      console.error('leave_room error:', error.message, error)
-      showToast(`退出房间失败：${error.message}`, 'error')
-      return false
-    }
+      if (deleteError) throw deleteError
 
-    console.log('leave_room data:', data)
+      // 更新玩家的 current_room_id
+      const { error: updateError } = await supabase
+        .from('players')
+        .update({ current_room_id: null })
+        .eq('id', playerId)
 
-    // 1）如果后端什么都不返回（data 为 null），但也没有报错，
-    //    我们直接当成“成功退出”
-    if (data == null) {
+      if (updateError) throw updateError
+
+      // 检查房间是否还有玩家，如果没有则删除房间
+      const { data: remainingPlayers, error: checkError } = await supabase
+        .from('room_players')
+        .select('player_id')
+        .eq('room_id', roomId)
+
+      if (checkError) throw checkError
+
+      if (!remainingPlayers || remainingPlayers.length === 0) {
+        // 房间没人了，删除房间
+        await supabase
+          .from('rooms')
+          .delete()
+          .eq('id', roomId)
+      }
+
       showToast('已退出房间', 'success')
       return true
-    }
 
-    // 2）如果返回的是 TABLE(success, message)，按之前的方式解析
-    const result = Array.isArray(data) ? data[0] ?? null : data ?? null
-
-    if (!result) {
-      // 理论上不会走到这里，有也当失败处理
-      showToast('退出房间失败：服务器返回异常', 'error')
+    } catch (error) {
+      console.error('Leave room error:', error)
+      showToast(`退出房间失败：${error.message}`, 'error')
       return false
+    } finally {
+      setLoading(false)
     }
-
-    if (result.success === false) {
-      showToast(result.message || '退出房间失败', 'error')
-      return false
-    }
-
-    showToast(result.message || '已退出房间', 'success')
-    return true
   }
 
   return { leaveRoom, loading }
 }
 
+/**
+ * 退出房间 - 备用方案
+ * 方案2：使用 RPC 但手动刷新
+ */
+export function useLeaveRoomWithRefresh() {
+  const [loading, setLoading] = useState(false)
+  const { showToast, setRoomPlayers } = useStore()
+
+  const leaveRoom = async (roomId, playerId) => {
+    if (!roomId || !playerId) {
+      showToast('退出房间失败：房间或玩家信息缺失', 'error')
+      return false
+    }
+
+    setLoading(true)
+    
+    try {
+      // 调用 RPC
+      const { data, error } = await supabase.rpc('leave_room', {
+        p_room_id: roomId,
+        p_player_id: playerId,
+      })
+
+      if (error) throw error
+
+      const result = Array.isArray(data) ? data[0] ?? null : data ?? null
+
+      if (result && result.success === false) {
+        throw new Error(result.message || '退出房间失败')
+      }
+
+      // 🔑 关键：手动触发玩家列表刷新
+      const { data: updatedPlayers } = await supabase
+        .from('room_players')
+        .select(`
+          *,
+          player:players(*)
+        `)
+        .eq('room_id', roomId)
+        .order('join_order')
+
+      if (updatedPlayers) {
+        setRoomPlayers(updatedPlayers)
+      }
+
+      showToast('已退出房间', 'success')
+      return true
+
+    } catch (error) {
+      console.error('Leave room error:', error)
+      showToast(`退出房间失败：${error.message}`, 'error')
+      return false
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return { leaveRoom, loading }
+}
 
 /**
- * 踢出玩家
+ * 踢出玩家 - 改进版本
  */
 export function useKickPlayer() {
   const [loading, setLoading] = useState(false)
@@ -243,16 +311,22 @@ export function useKickPlayer() {
     setLoading(true)
 
     try {
-      const { data, error } = await supabase.rpc('kick_player', {
-        p_room_id: roomId,
-        p_host_id: hostId,
-        p_target_player_id: targetPlayerId
-      })
+      // 方案1：直接删除（推荐）
+      const { error: deleteError } = await supabase
+        .from('room_players')
+        .delete()
+        .eq('room_id', roomId)
+        .eq('player_id', targetPlayerId)
 
-      if (error) throw error
-      
-      const result = data[0]
-      return result.success
+      if (deleteError) throw deleteError
+
+      // 更新被踢玩家的 current_room_id
+      await supabase
+        .from('players')
+        .update({ current_room_id: null })
+        .eq('id', targetPlayerId)
+
+      return true
     } catch (err) {
       console.error('Kick player error:', err)
       return false
@@ -294,7 +368,13 @@ export function useRollDice() {
         .order('roll_result', { ascending: false })
 
       if (allPlayers && allPlayers.length >= 2) {
-        // 设置前两名为队长
+        // 先清除所有队长标记
+        await supabase
+          .from('room_players')
+          .update({ is_captain: false })
+          .eq('room_id', roomId)
+        
+        // 然后设置前两名为队长
         await supabase
           .from('room_players')
           .update({ is_captain: true })

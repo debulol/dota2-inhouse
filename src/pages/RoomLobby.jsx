@@ -80,18 +80,26 @@ export function RoomLobby() {
   }
 
   const handleStartDraft = async () => {
-    // 检查是否满10人
-    if (roomPlayers.length < 10) {
-      showToast('需要10人才能开始选人', 'warning')
-      return
-    }
+  // ... 前面的检查逻辑保持不变 ...
 
-    // 检查是否都roll了
-    const allRolled = roomPlayers.every(p => p.roll_result !== null)
-    if (!allRolled) {
-      showToast('还有玩家未Roll点', 'warning')
-      return
-    }
+  try {
+    // 获取按roll点排序的玩家（前两名是队长）
+    const sortedByRoll = [...roomPlayers].sort((a, b) => b.roll_result - a.roll_result)
+    const captain1 = sortedByRoll[0] // 第一名 → 天辉队长
+    const captain2 = sortedByRoll[1] // 第二名 → 夜魇队长
+
+    // 自动将两个队长分配到各自队伍
+    await supabase
+      .from('room_players')
+      .update({ team: 'radiant' })
+      .eq('room_id', roomId)
+      .eq('player_id', captain1.player_id)
+
+    await supabase
+      .from('room_players')
+      .update({ team: 'dire' })
+      .eq('room_id', roomId)
+      .eq('player_id', captain2.player_id)
 
     // 更新房间状态
     const { error } = await supabase
@@ -104,8 +112,13 @@ export function RoomLobby() {
       return
     }
 
+    showToast('队长已自动分配到各自队伍', 'success')
     navigate(`/room/${roomId}/draft`)
+  } catch (error) {
+    console.error('Start draft error:', error)
+    showToast('开始选人失败', 'error')
   }
+}
 
   if (subscriptionLoading) {
     return (
