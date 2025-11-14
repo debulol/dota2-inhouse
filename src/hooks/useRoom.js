@@ -176,24 +176,15 @@ export function useJoinRoom() {
   return { joinRoom, loading, error }
 }
 
-/**
- * 退出房间 - 改进版本
- * 方案1：直接操作数据库（推荐）
- */
 export function useLeaveRoom() {
   const [loading, setLoading] = useState(false)
   const { showToast } = useStore()
 
   const leaveRoom = async (roomId, playerId) => {
-    if (!roomId || !playerId) {
-      showToast('退出房间失败：房间或玩家信息缺失', 'error')
-      return false
-    }
-
     setLoading(true)
     
     try {
-      // 方案1：直接删除 room_players 记录（这会触发 Realtime 事件）
+      // ✅ 直接删除 - 会触发 Realtime DELETE 事件
       const { error: deleteError } = await supabase
         .from('room_players')
         .delete()
@@ -202,7 +193,7 @@ export function useLeaveRoom() {
 
       if (deleteError) throw deleteError
 
-      // 更新玩家的 current_room_id
+      // 更新玩家状态
       const { error: updateError } = await supabase
         .from('players')
         .update({ current_room_id: null })
@@ -210,16 +201,13 @@ export function useLeaveRoom() {
 
       if (updateError) throw updateError
 
-      // 检查房间是否还有玩家，如果没有则删除房间
-      const { data: remainingPlayers, error: checkError } = await supabase
+      // 清理空房间
+      const { data: remainingPlayers } = await supabase
         .from('room_players')
         .select('player_id')
         .eq('room_id', roomId)
 
-      if (checkError) throw checkError
-
       if (!remainingPlayers || remainingPlayers.length === 0) {
-        // 房间没人了，删除房间
         await supabase
           .from('rooms')
           .delete()
@@ -228,67 +216,6 @@ export function useLeaveRoom() {
 
       showToast('已退出房间', 'success')
       return true
-
-    } catch (error) {
-      console.error('Leave room error:', error)
-      showToast(`退出房间失败：${error.message}`, 'error')
-      return false
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return { leaveRoom, loading }
-}
-
-/**
- * 退出房间 - 备用方案
- * 方案2：使用 RPC 但手动刷新
- */
-export function useLeaveRoomWithRefresh() {
-  const [loading, setLoading] = useState(false)
-  const { showToast, setRoomPlayers } = useStore()
-
-  const leaveRoom = async (roomId, playerId) => {
-    if (!roomId || !playerId) {
-      showToast('退出房间失败：房间或玩家信息缺失', 'error')
-      return false
-    }
-
-    setLoading(true)
-    
-    try {
-      // 调用 RPC
-      const { data, error } = await supabase.rpc('leave_room', {
-        p_room_id: roomId,
-        p_player_id: playerId,
-      })
-
-      if (error) throw error
-
-      const result = Array.isArray(data) ? data[0] ?? null : data ?? null
-
-      if (result && result.success === false) {
-        throw new Error(result.message || '退出房间失败')
-      }
-
-      // 🔑 关键：手动触发玩家列表刷新
-      const { data: updatedPlayers } = await supabase
-        .from('room_players')
-        .select(`
-          *,
-          player:players(*)
-        `)
-        .eq('room_id', roomId)
-        .order('join_order')
-
-      if (updatedPlayers) {
-        setRoomPlayers(updatedPlayers)
-      }
-
-      showToast('已退出房间', 'success')
-      return true
-
     } catch (error) {
       console.error('Leave room error:', error)
       showToast(`退出房间失败：${error.message}`, 'error')
