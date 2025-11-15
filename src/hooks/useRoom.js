@@ -3,7 +3,8 @@ import { supabase } from '@/lib/supabase'
 import { useStore } from '@/store/useStore'
 
 /**
- * 实时订阅房间数据
+ * 实时订阅房间数据 - 增强版
+ * 现在在 rooms 更新时也刷新玩家列表，配合 RPC 的 UPDATE rooms 策略
  */
 export function useRoomSubscription(roomId) {
   const { setCurrentRoom, setRoomPlayers } = useStore()
@@ -55,16 +56,34 @@ export function useRoomSubscription(roomId) {
             schema: 'public',
             table: 'rooms',
             filter: `id=eq.${roomId}`
-          }, (payload) => {
+          }, async (payload) => {
+            console.log('🔔 Rooms 事件:', payload.eventType)
+            
             if (payload.eventType === 'UPDATE') {
               setCurrentRoom(payload.new)
+              
+              // 🔑 关键添加：当 rooms 更新时也刷新玩家列表
+              // 这样就能响应 RPC 函数末尾的 UPDATE rooms 操作
+              const { data } = await supabase
+                .from('room_players')
+                .select(`
+                  *,
+                  player:players(*)
+                `)
+                .eq('room_id', roomId)
+                .order('join_order')
+              
+              if (data) {
+                console.log('✅ 通过 rooms 更新刷新玩家列表:', data.length, '人')
+                setRoomPlayers(data)
+              }
             } else if (payload.eventType === 'DELETE') {
               setCurrentRoom(null)
             }
           })
           .subscribe()
 
-        // 订阅房间玩家变化
+        // 订阅房间玩家变化（作为备用通道）
         playersChannel = supabase
           .channel(`room_players:${roomId}`)
           .on('postgres_changes', {
@@ -72,7 +91,9 @@ export function useRoomSubscription(roomId) {
             schema: 'public',
             table: 'room_players',
             filter: `room_id=eq.${roomId}`
-          }, async () => {
+          }, async (payload) => {
+            console.log('🔔 Players 事件:', payload.eventType)
+            
             // 重新获取玩家列表
             const { data } = await supabase
               .from('room_players')
@@ -84,6 +105,7 @@ export function useRoomSubscription(roomId) {
               .order('join_order')
 
             if (data) {
+              console.log('✅ 通过 players 更新刷新玩家列表:', data.length, '人')
               setRoomPlayers(data)
             }
           })
@@ -108,7 +130,7 @@ export function useRoomSubscription(roomId) {
 }
 
 /**
- * 创建房间
+ * 创建房间 - 使用 RPC
  */
 export function useCreateRoom() {
   const [loading, setLoading] = useState(false)
@@ -125,8 +147,7 @@ export function useCreateRoom() {
       })
 
       if (rpcError) throw rpcError
-
-      return data[0] // { room_id, room_code }
+      return data[0]
     } catch (err) {
       console.error('Create room error:', err)
       setError(err.message)
@@ -140,7 +161,7 @@ export function useCreateRoom() {
 }
 
 /**
- * 加入房间
+ * 加入房间 - 使用 RPC
  */
 export function useJoinRoom() {
   const [loading, setLoading] = useState(false)
@@ -176,48 +197,44 @@ export function useJoinRoom() {
   return { joinRoom, loading, error }
 }
 
+/**
+ * 退出房间 - 统一使用 RPC ✅
+ * 前提：数据库中的 leave_room 函数已添加 UPDATE rooms
+ */
 export function useLeaveRoom() {
   const [loading, setLoading] = useState(false)
   const { showToast } = useStore()
 
   const leaveRoom = async (roomId, playerId) => {
+    if (!roomId || !playerId) {
+      showToast('退出房间失败：房间或玩家信息缺失', 'error')
+      return false
+    }
+
     setLoading(true)
+    console.log('🚪 退出房间 (RPC):', { roomId, playerId })
     
     try {
-      // ✅ 直接删除 - 会触发 Realtime DELETE 事件
-      const { error: deleteError } = await supabase
-        .from('room_players')
-        .delete()
-        .eq('room_id', roomId)
-        .eq('player_id', playerId)
+      // 调用改进后的 RPC 函数
+      // RPC 内部会执行 UPDATE rooms，触发 Realtime
+      const { data, error } = await supabase.rpc('leave_room', {
+        p_room_id: roomId,
+        p_player_id: playerId,
+      })
 
-      if (deleteError) throw deleteError
+      if (error) throw error
 
-      // 更新玩家状态
-      const { error: updateError } = await supabase
-        .from('players')
-        .update({ current_room_id: null })
-        .eq('id', playerId)
-
-      if (updateError) throw updateError
-
-      // 清理空房间
-      const { data: remainingPlayers } = await supabase
-        .from('room_players')
-        .select('player_id')
-        .eq('room_id', roomId)
-
-      if (!remainingPlayers || remainingPlayers.length === 0) {
-        await supabase
-          .from('rooms')
-          .delete()
-          .eq('id', roomId)
+      const result = Array.isArray(data) ? data[0] ?? null : data ?? null
+      if (result && result.success === false) {
+        throw new Error(result.message || '退出房间失败')
       }
 
+      console.log('✅ 退出房间成功')
       showToast('已退出房间', 'success')
       return true
+
     } catch (error) {
-      console.error('Leave room error:', error)
+      console.error('❌ 退出房间失败:', error)
       showToast(`退出房间失败：${error.message}`, 'error')
       return false
     } finally {
@@ -229,33 +246,35 @@ export function useLeaveRoom() {
 }
 
 /**
- * 踢出玩家 - 改进版本
+ * 踢出玩家 - 统一使用 RPC ✅
+ * 前提：数据库中有 kick_player 函数
  */
 export function useKickPlayer() {
   const [loading, setLoading] = useState(false)
+  const { showToast } = useStore()
 
   const kickPlayer = useCallback(async (roomId, hostId, targetPlayerId) => {
     setLoading(true)
+    console.log('👢 踢出玩家 (RPC):', targetPlayerId)
 
     try {
-      // 方案1：直接删除（推荐）
-      const { error: deleteError } = await supabase
-        .from('room_players')
-        .delete()
-        .eq('room_id', roomId)
-        .eq('player_id', targetPlayerId)
+      const { data, error } = await supabase.rpc('kick_player', {
+        p_room_id: roomId,
+        p_host_id: hostId,
+        p_target_player_id: targetPlayerId
+      })
 
-      if (deleteError) throw deleteError
+      if (error) throw error
 
-      // 更新被踢玩家的 current_room_id
-      await supabase
-        .from('players')
-        .update({ current_room_id: null })
-        .eq('id', targetPlayerId)
+      const result = Array.isArray(data) ? data[0] ?? null : data ?? null
+      if (result && result.success === false) {
+        throw new Error(result.message || '踢人失败')
+      }
 
+      console.log('✅ 玩家已被踢出')
       return true
     } catch (err) {
-      console.error('Kick player error:', err)
+      console.error('❌ 踢出玩家失败:', err)
       return false
     } finally {
       setLoading(false)
@@ -266,7 +285,8 @@ export function useKickPlayer() {
 }
 
 /**
- * Roll点
+ * Roll点 - 直接操作数据库
+ * 这个操作简单且频繁，不需要用 RPC
  */
 export function useRollDice() {
   const [loading, setLoading] = useState(false)
@@ -286,7 +306,7 @@ export function useRollDice() {
 
       if (error) throw error
 
-      // 检查是否所有人都roll了，如果是，自动设置队长
+      // 检查是否所有人都roll了
       const { data: allPlayers } = await supabase
         .from('room_players')
         .select('player_id, roll_result')
@@ -295,13 +315,13 @@ export function useRollDice() {
         .order('roll_result', { ascending: false })
 
       if (allPlayers && allPlayers.length >= 2) {
-        // 先清除所有队长标记
+        // 清除旧队长
         await supabase
           .from('room_players')
           .update({ is_captain: false })
           .eq('room_id', roomId)
         
-        // 然后设置前两名为队长
+        // 设置新队长
         await supabase
           .from('room_players')
           .update({ is_captain: true })
@@ -322,7 +342,7 @@ export function useRollDice() {
 }
 
 /**
- * 选择队员
+ * 选择队员 - 直接操作数据库
  */
 export function useSelectPlayer() {
   const [loading, setLoading] = useState(false)
@@ -351,7 +371,7 @@ export function useSelectPlayer() {
 }
 
 /**
- * 设置队伍偏好
+ * 设置队伍偏好 - 直接操作数据库
  */
 export function useSetPreference() {
   const [loading, setLoading] = useState(false)
@@ -380,7 +400,7 @@ export function useSetPreference() {
 }
 
 /**
- * 开始游戏
+ * 开始游戏 - 直接操作数据库
  */
 export function useStartGame() {
   const [loading, setLoading] = useState(false)
@@ -423,7 +443,7 @@ export function useStartGame() {
 }
 
 /**
- * 完成比赛
+ * 完成比赛 - 使用 RPC
  */
 export function useFinishMatch() {
   const [loading, setLoading] = useState(false)
