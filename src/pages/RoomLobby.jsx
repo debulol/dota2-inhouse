@@ -33,7 +33,7 @@ export function RoomLobby() {
       return
     }
 
-    // 检查并列第二
+    // æ£€æŸ¥å¹¶åˆ—ç¬¬äºŒ
     if (roomPlayers.length > 0) {
       const playersWithRolls = roomPlayers.filter(p => p.roll_result)
       const tied = detectTiedSecond(playersWithRolls)
@@ -41,14 +41,30 @@ export function RoomLobby() {
     }
   }, [roomPlayers, currentPlayer, navigate])
 
+  // 🔥 监听房间状态变化,实现自动跳转
+  useEffect(() => {
+    if (!currentRoom) return
+    
+    // 当房间状态变为drafting时,自动跳转到选人页面
+    if (currentRoom.status === 'drafting') {
+      console.log('🎯 检测到房间进入选人阶段,自动跳转到Draft页面')
+      navigate(`/room/${roomId}/draft`)
+    }
+    // 当房间状态变为gaming时,自动跳转到游戏页面
+    else if (currentRoom.status === 'gaming') {
+      console.log('🎮 检测到房间进入游戏阶段,自动跳转到Game页面')
+      navigate(`/room/${roomId}/game`)
+    }
+  }, [currentRoom?.status, roomId, navigate])
+
   const handleRoll = async () => {
     const result = rollDice()
     const success = await roll(roomId, currentPlayer.id, result)
     
     if (success) {
-      showToast(`你Roll到了 ${result} 点！`, 'success')
+      showToast(`ä½ Rollåˆ°äº† ${result} ç‚¹ï¼`, 'success')
     } else {
-      showToast('Roll点失败', 'error')
+      showToast('Rollç‚¹å¤±è´¥', 'error')
     }
   }
 
@@ -62,9 +78,9 @@ export function RoomLobby() {
   const handleKick = async (playerId) => {
     const success = await kickPlayer(roomId, currentPlayer.id, playerId)
     if (success) {
-      showToast('已踢出玩家', 'success')
+      showToast('å·²è¸¢å‡ºçŽ©å®¶', 'success')
     } else {
-      showToast('踢人失败', 'error')
+      showToast('è¸¢äººå¤±è´¥', 'error')
     }
   }
 
@@ -72,53 +88,40 @@ export function RoomLobby() {
     try {
       await navigator.clipboard.writeText(currentRoom.room_code)
       setCopied(true)
-      showToast('房间号已复制', 'success')
+      showToast('æˆ¿é—´å·å·²å¤åˆ¶', 'success')
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      showToast('复制失败', 'error')
+      showToast('å¤åˆ¶å¤±è´¥', 'error')
     }
   }
 
   const handleStartDraft = async () => {
-  // ... 前面的检查逻辑保持不变 ...
+    // æ£€æŸ¥æ˜¯å¦æ»¡10äºº
+    if (roomPlayers.length < 10) {
+      showToast('éœ€è¦10äººæ‰èƒ½å¼€å§‹é€‰äºº', 'warning')
+      return
+    }
 
-  try {
-    // 获取按roll点排序的玩家（前两名是队长）
-    const sortedByRoll = [...roomPlayers].sort((a, b) => b.roll_result - a.roll_result)
-    const captain1 = sortedByRoll[0] // 第一名 → 天辉队长
-    const captain2 = sortedByRoll[1] // 第二名 → 夜魇队长
+    // æ£€æŸ¥æ˜¯å¦éƒ½rolläº†
+    const allRolled = roomPlayers.every(p => p.roll_result !== null)
+    if (!allRolled) {
+      showToast('è¿˜æœ‰çŽ©å®¶æœªRollç‚¹', 'warning')
+      return
+    }
 
-    // 自动将两个队长分配到各自队伍
-    await supabase
-      .from('room_players')
-      .update({ team: 'radiant' })
-      .eq('room_id', roomId)
-      .eq('player_id', captain1.player_id)
-
-    await supabase
-      .from('room_players')
-      .update({ team: 'dire' })
-      .eq('room_id', roomId)
-      .eq('player_id', captain2.player_id)
-
-    // 更新房间状态
+    // æ›´æ–°æˆ¿é—´çŠ¶æ€
     const { error } = await supabase
       .from('rooms')
       .update({ status: 'drafting' })
       .eq('id', roomId)
 
     if (error) {
-      showToast('开始选人失败', 'error')
+      showToast('å¼€å§‹é€‰äººå¤±è´¥', 'error')
       return
     }
 
-    showToast('队长已自动分配到各自队伍', 'success')
     navigate(`/room/${roomId}/draft`)
-  } catch (error) {
-    console.error('Start draft error:', error)
-    showToast('开始选人失败', 'error')
   }
-}
 
   if (subscriptionLoading) {
     return (
@@ -132,12 +135,12 @@ export function RoomLobby() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-xl text-gray-600 mb-4">房间不存在或已解散</p>
+          <p className="text-xl text-gray-600 mb-4">æˆ¿é—´ä¸å­˜åœ¨æˆ–å·²è§£æ•£</p>
           <button
             onClick={() => navigate('/rooms')}
             className="text-blue-500 hover:underline"
           >
-            返回房间列表
+            è¿”å›žæˆ¿é—´åˆ—è¡¨
           </button>
         </div>
       </div>
@@ -150,7 +153,7 @@ export function RoomLobby() {
   const canStartDraft = isHost && roomPlayers.length === 10 && 
                         roomPlayers.every(p => p.roll_result !== null)
 
-  // 按roll点结果降序排列
+  // æŒ‰rollç‚¹ç»“æžœé™åºæŽ’åˆ—
   const sortedPlayers = [...roomPlayers].sort((a, b) => {
     if (a.roll_result === null) return 1
     if (b.roll_result === null) return -1
@@ -160,7 +163,7 @@ export function RoomLobby() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* 头部 */}
+        {/* å¤´éƒ¨ */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -173,8 +176,8 @@ export function RoomLobby() {
               <div>
                 <h1 className="text-2xl font-bold">{currentRoom.room_name}</h1>
                 <p className="text-gray-600 text-sm mt-1">
-                  房间号: {currentRoom.room_code} · 
-                  {roomPlayers.length}/10 人
+                  æˆ¿é—´å·: {currentRoom.room_code} Â· 
+                  {roomPlayers.length}/10 äºº
                 </p>
               </div>
             </div>
@@ -187,12 +190,12 @@ export function RoomLobby() {
                 {copied ? (
                   <>
                     <Check className="w-5 h-5" />
-                    已复制
+                    å·²å¤åˆ¶
                   </>
                 ) : (
                   <>
                     <Copy className="w-5 h-5" />
-                    复制房间号
+                    å¤åˆ¶æˆ¿é—´å·
                   </>
                 )}
               </button>
@@ -203,23 +206,23 @@ export function RoomLobby() {
                   className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg transition-colors"
                 >
                   <PlayCircle className="w-5 h-5" />
-                  开始选人
+                  å¼€å§‹é€‰äºº
                 </button>
               )}
             </div>
           </div>
         </div>
 
-        {/* Roll点结果区域 */}
+        {/* Rollç‚¹ç»“æžœåŒºåŸŸ */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
             <Dice5 className="w-6 h-6 text-blue-500" />
-            Roll点结果
+            Rollç‚¹ç»“æžœ
           </h2>
 
           {sortedPlayers.filter(p => p.roll_result).length === 0 ? (
             <p className="text-center text-gray-500 py-8">
-              还没有人Roll点，快来第一个吧！
+              è¿˜æ²¡æœ‰äººRollç‚¹ï¼Œå¿«æ¥ç¬¬ä¸€ä¸ªå§ï¼
             </p>
           ) : (
             <div className="space-y-2">
@@ -259,16 +262,16 @@ export function RoomLobby() {
           {tiedPlayers.length > 0 && (
             <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-red-700 font-medium">
-                ⚠️ 检测到并列第二名，请这些玩家重新Roll点！
+                âš ï¸ æ£€æµ‹åˆ°å¹¶åˆ—ç¬¬äºŒåï¼Œè¯·è¿™äº›çŽ©å®¶é‡æ–°Rollç‚¹ï¼
               </p>
             </div>
           )}
         </div>
 
-        {/* 玩家列表 */}
+        {/* çŽ©å®¶åˆ—è¡¨ */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold">玩家列表</h2>
+            <h2 className="text-xl font-bold">çŽ©å®¶åˆ—è¡¨</h2>
             {!hasRolled && (
               <button
                 onClick={handleRoll}
@@ -280,7 +283,7 @@ export function RoomLobby() {
                 ) : (
                   <>
                     <Dice5 className="w-5 h-5" />
-                    Roll点
+                    Rollç‚¹
                   </>
                 )}
               </button>
@@ -301,7 +304,7 @@ export function RoomLobby() {
                   <button
                     onClick={() => handleKick(playerData.player_id)}
                     className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
-                    title="踢出玩家"
+                    title="è¸¢å‡ºçŽ©å®¶"
                   >
                     <UserMinus className="w-4 h-4" />
                   </button>
@@ -313,10 +316,10 @@ export function RoomLobby() {
           {roomPlayers.length < 10 && (
             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-center">
               <p className="text-blue-700">
-                等待更多玩家加入... ({roomPlayers.length}/10)
+                ç­‰å¾…æ›´å¤šçŽ©å®¶åŠ å…¥... ({roomPlayers.length}/10)
               </p>
               <p className="text-sm text-blue-600 mt-2">
-                分享房间号 <strong>{currentRoom.room_code}</strong> 给你的朋友
+                åˆ†äº«æˆ¿é—´å· <strong>{currentRoom.room_code}</strong> ç»™ä½ çš„æœ‹å‹
               </p>
             </div>
           )}
