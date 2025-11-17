@@ -12,7 +12,7 @@ import { PlayerCard } from '@/components/PlayerCard'
 import { rollDice, detectTiedSecond } from '@/lib/utils'
 import {
   ArrowLeft, Dice5, Crown, Copy, Check,
-  UserMinus, Loader2, PlayCircle
+  UserMinus, Loader2, PlayCircle, Users
 } from 'lucide-react'
 
 export function RoomLobby() {
@@ -33,7 +33,7 @@ export function RoomLobby() {
       return
     }
 
-    // æ£€æŸ¥å¹¶åˆ—ç¬¬äºŒ
+    // 检查并列第二
     if (roomPlayers.length > 0) {
       const playersWithRolls = roomPlayers.filter(p => p.roll_result)
       const tied = detectTiedSecond(playersWithRolls)
@@ -41,30 +41,14 @@ export function RoomLobby() {
     }
   }, [roomPlayers, currentPlayer, navigate])
 
-  // 🔥 监听房间状态变化,实现自动跳转
-  useEffect(() => {
-    if (!currentRoom) return
-    
-    // 当房间状态变为drafting时,自动跳转到选人页面
-    if (currentRoom.status === 'drafting') {
-      console.log('🎯 检测到房间进入选人阶段,自动跳转到Draft页面')
-      navigate(`/room/${roomId}/draft`)
-    }
-    // 当房间状态变为gaming时,自动跳转到游戏页面
-    else if (currentRoom.status === 'gaming') {
-      console.log('🎮 检测到房间进入游戏阶段,自动跳转到Game页面')
-      navigate(`/room/${roomId}/game`)
-    }
-  }, [currentRoom?.status, roomId, navigate])
-
   const handleRoll = async () => {
     const result = rollDice()
     const success = await roll(roomId, currentPlayer.id, result)
     
     if (success) {
-      showToast(`ä½ Rollåˆ°äº† ${result} ç‚¹ï¼`, 'success')
+      showToast(`你 Roll到了 ${result} 点！`, 'success')
     } else {
-      showToast('Rollç‚¹å¤±è´¥', 'error')
+      showToast('Roll点失败', 'error')
     }
   }
 
@@ -78,9 +62,9 @@ export function RoomLobby() {
   const handleKick = async (playerId) => {
     const success = await kickPlayer(roomId, currentPlayer.id, playerId)
     if (success) {
-      showToast('å·²è¸¢å‡ºçŽ©å®¶', 'success')
+      showToast('已踢出玩家', 'success')
     } else {
-      showToast('è¸¢äººå¤±è´¥', 'error')
+      showToast('踢人失败', 'error')
     }
   }
 
@@ -88,38 +72,43 @@ export function RoomLobby() {
     try {
       await navigator.clipboard.writeText(currentRoom.room_code)
       setCopied(true)
-      showToast('æˆ¿é—´å·å·²å¤åˆ¶', 'success')
+      showToast('房间号已复制', 'success')
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      showToast('å¤åˆ¶å¤±è´¥', 'error')
+      showToast('复制失败', 'error')
     }
   }
 
   const handleStartDraft = async () => {
-    // æ£€æŸ¥æ˜¯å¦æ»¡10äºº
+    // 检查是否满10人
     if (roomPlayers.length < 10) {
-      showToast('éœ€è¦10äººæ‰èƒ½å¼€å§‹é€‰äºº', 'warning')
+      showToast('需要10人才能开始选人', 'warning')
       return
     }
 
-    // æ£€æŸ¥æ˜¯å¦éƒ½rolläº†
+    // 检查是否都roll了
     const allRolled = roomPlayers.every(p => p.roll_result !== null)
     if (!allRolled) {
-      showToast('è¿˜æœ‰çŽ©å®¶æœªRollç‚¹', 'warning')
+      showToast('还有玩家未Roll点', 'warning')
       return
     }
 
-    // æ›´æ–°æˆ¿é—´çŠ¶æ€
+    // 更新房间状态为drafting
     const { error } = await supabase
       .from('rooms')
       .update({ status: 'drafting' })
       .eq('id', roomId)
 
     if (error) {
-      showToast('å¼€å§‹é€‰äººå¤±è´¥', 'error')
+      showToast('开始选人失败', 'error')
       return
     }
 
+    showToast('选人阶段已开启！', 'success')
+  }
+
+  // 手动进入选人页面
+  const handleEnterDraft = () => {
     navigate(`/room/${roomId}/draft`)
   }
 
@@ -135,12 +124,12 @@ export function RoomLobby() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-xl text-gray-600 mb-4">æˆ¿é—´ä¸å­˜åœ¨æˆ–å·²è§£æ•£</p>
+          <p className="text-xl text-gray-600 mb-4">房间不存在或已解散</p>
           <button
             onClick={() => navigate('/rooms')}
             className="text-blue-500 hover:underline"
           >
-            è¿”å›žæˆ¿é—´åˆ—è¡¨
+            返回房间列表
           </button>
         </div>
       </div>
@@ -150,10 +139,11 @@ export function RoomLobby() {
   const isHost = currentRoom.host_id === currentPlayer.id
   const currentPlayerData = roomPlayers.find(p => p.player_id === currentPlayer.id)
   const hasRolled = currentPlayerData?.roll_result !== null
-  const canStartDraft = isHost && roomPlayers.length === 10 && 
-                        roomPlayers.every(p => p.roll_result !== null)
+  const allRolled = roomPlayers.length === 10 && roomPlayers.every(p => p.roll_result !== null)
+  const canStartDraft = isHost && allRolled
+  const isDrafting = currentRoom.status === 'drafting'
 
-  // æŒ‰rollç‚¹ç»“æžœé™åºæŽ’åˆ—
+  // 按roll点结果降序排列
   const sortedPlayers = [...roomPlayers].sort((a, b) => {
     if (a.roll_result === null) return 1
     if (b.roll_result === null) return -1
@@ -163,7 +153,7 @@ export function RoomLobby() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* å¤´éƒ¨ */}
+        {/* 头部 */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -176,8 +166,8 @@ export function RoomLobby() {
               <div>
                 <h1 className="text-2xl font-bold">{currentRoom.room_name}</h1>
                 <p className="text-gray-600 text-sm mt-1">
-                  æˆ¿é—´å·: {currentRoom.room_code} Â· 
-                  {roomPlayers.length}/10 äºº
+                  房间号: {currentRoom.room_code} · 
+                  {roomPlayers.length}/10 人
                 </p>
               </div>
             </div>
@@ -190,39 +180,74 @@ export function RoomLobby() {
                 {copied ? (
                   <>
                     <Check className="w-5 h-5" />
-                    å·²å¤åˆ¶
+                    已复制
                   </>
                 ) : (
                   <>
                     <Copy className="w-5 h-5" />
-                    å¤åˆ¶æˆ¿é—´å·
+                    复制房间号
                   </>
                 )}
               </button>
 
-              {canStartDraft && (
+              {/* 房主才能看到的开始选人按钮 */}
+              {isHost && canStartDraft && !isDrafting && (
                 <button
                   onClick={handleStartDraft}
                   className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg transition-colors"
                 >
                   <PlayCircle className="w-5 h-5" />
-                  å¼€å§‹é€‰äºº
+                  开启选人阶段
+                </button>
+              )}
+
+              {/* 所有人都能看到的进入选人按钮(当选人阶段已开启) */}
+              {isDrafting && (
+                <button
+                  onClick={handleEnterDraft}
+                  className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors"
+                >
+                  <Users className="w-5 h-5" />
+                  进入选人页面
                 </button>
               )}
             </div>
           </div>
         </div>
 
-        {/* Rollç‚¹ç»“æžœåŒºåŸŸ */}
+        {/* 选人阶段提示 */}
+        {isDrafting && (
+          <div className="bg-blue-50 border-2 border-blue-500 rounded-lg p-6 mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Users className="w-8 h-8 text-blue-600" />
+                <div>
+                  <h3 className="text-xl font-bold text-blue-900">选人阶段已开启！</h3>
+                  <p className="text-blue-700 text-sm mt-1">
+                    队长已确定，点击右侧按钮进入选人页面
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleEnterDraft}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold transition-colors"
+              >
+                立即进入 →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Roll点结果区域 */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
             <Dice5 className="w-6 h-6 text-blue-500" />
-            Rollç‚¹ç»“æžœ
+            Roll点结果
           </h2>
 
           {sortedPlayers.filter(p => p.roll_result).length === 0 ? (
             <p className="text-center text-gray-500 py-8">
-              è¿˜æ²¡æœ‰äººRollç‚¹ï¼Œå¿«æ¥ç¬¬ä¸€ä¸ªå§ï¼
+              还没有人Roll点，快来第一个吧！
             </p>
           ) : (
             <div className="space-y-2">
@@ -262,16 +287,16 @@ export function RoomLobby() {
           {tiedPlayers.length > 0 && (
             <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-red-700 font-medium">
-                âš ï¸ æ£€æµ‹åˆ°å¹¶åˆ—ç¬¬äºŒåï¼Œè¯·è¿™äº›çŽ©å®¶é‡æ–°Rollç‚¹ï¼
+                ⚠️ 检测到并列第二名，请这些玩家重新Roll点！
               </p>
             </div>
           )}
         </div>
 
-        {/* çŽ©å®¶åˆ—è¡¨ */}
+        {/* 玩家列表 */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold">çŽ©å®¶åˆ—è¡¨</h2>
+            <h2 className="text-xl font-bold">玩家列表</h2>
             {!hasRolled && (
               <button
                 onClick={handleRoll}
@@ -283,7 +308,7 @@ export function RoomLobby() {
                 ) : (
                   <>
                     <Dice5 className="w-5 h-5" />
-                    Rollç‚¹
+                    Roll点
                   </>
                 )}
               </button>
@@ -304,7 +329,7 @@ export function RoomLobby() {
                   <button
                     onClick={() => handleKick(playerData.player_id)}
                     className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
-                    title="è¸¢å‡ºçŽ©å®¶"
+                    title="踢出玩家"
                   >
                     <UserMinus className="w-4 h-4" />
                   </button>
@@ -316,10 +341,10 @@ export function RoomLobby() {
           {roomPlayers.length < 10 && (
             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-center">
               <p className="text-blue-700">
-                ç­‰å¾…æ›´å¤šçŽ©å®¶åŠ å…¥... ({roomPlayers.length}/10)
+                等待更多玩家加入... ({roomPlayers.length}/10)
               </p>
               <p className="text-sm text-blue-600 mt-2">
-                åˆ†äº«æˆ¿é—´å· <strong>{currentRoom.room_code}</strong> ç»™ä½ çš„æœ‹å‹
+                分享房间号 <strong>{currentRoom.room_code}</strong> 给你的朋友
               </p>
             </div>
           )}

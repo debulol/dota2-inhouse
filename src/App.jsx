@@ -61,9 +61,6 @@ function AppContent() {
         {/* 个人战绩详情 */}
         <Route path="/stats/:playerId" element={<PlayerStatsPage />} />
         
-        {/* 测试页面 */}
-        <Route path="/test" element={<TestRoomPage />} />
-        
         {/* 图片测试页面 */}
         <Route path="/test/image" element={<TestImagePage />} />
         

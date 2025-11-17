@@ -19,24 +19,90 @@ export function DraftPage() {
   const { setPreference } = useSetPreference()
   const { startGame, loading: startingGame } = useStartGame()
 
-  const [selectedTeam, setSelectedTeam] = useState(null) // 当前用户选择的偏好队伍
+  const [selectedTeam, setSelectedTeam] = useState(null)
+  const [captainsAssigned, setCaptainsAssigned] = useState(false)
 
   useEffect(() => {
     if (!currentPlayer) {
       navigate('/')
       return
     }
+  }, [currentPlayer, navigate])
 
-    if (currentRoom && currentRoom.status === 'gaming') {
+  // 监听房间状态变化
+  useEffect(() => {
+    if (!currentRoom) return
+
+    if (currentRoom.status === 'gaming') {
       navigate(`/room/${roomId}/game`)
+    } else if (currentRoom.status === 'waiting') {
+      navigate(`/room/${roomId}/lobby`)
+    }
+  }, [currentRoom?.status, roomId, navigate])
+
+  // 🔥 队长自动就位逻辑
+  useEffect(() => {
+    const assignCaptainsToTeams = async () => {
+      if (!roomPlayers || roomPlayers.length === 0) return
+      if (captainsAssigned) return // 避免重复执行
+
+      // 找出所有队长
+      const captains = roomPlayers.filter(p => p.is_captain)
+      
+      if (captains.length !== 2) return
+
+      // 按roll点排序,确定哪个是队长1,哪个是队长2
+      const sortedCaptains = [...captains].sort((a, b) => 
+        (b.roll_result || 0) - (a.roll_result || 0)
+      )
+
+      const captain1 = sortedCaptains[0] // roll点最高 → radiant
+      const captain2 = sortedCaptains[1] // roll点第二 → dire
+
+      // 检查队长是否已经分配到队伍
+      const captain1HasTeam = captain1.team !== null
+      const captain2HasTeam = captain2.team !== null
+
+      // 如果两个队长都已经有队伍了,就不需要再分配
+      if (captain1HasTeam && captain2HasTeam) {
+        setCaptainsAssigned(true)
+        return
+      }
+
+      console.log('🎯 开始分配队长到队伍...')
+      console.log('队长1 (Radiant):', captain1.player.username, 'Roll:', captain1.roll_result)
+      console.log('队长2 (Dire):', captain2.player.username, 'Roll:', captain2.roll_result)
+
+      // 分配队长1到天辉
+      if (!captain1HasTeam) {
+        const success1 = await selectPlayer(roomId, captain1.player_id, 'radiant')
+        if (success1) {
+          console.log('✅ 队长1已分配到天辉')
+        }
+      }
+
+      // 分配队长2到夜魇
+      if (!captain2HasTeam) {
+        const success2 = await selectPlayer(roomId, captain2.player_id, 'dire')
+        if (success2) {
+          console.log('✅ 队长2已分配到夜魇')
+        }
+      }
+
+      setCaptainsAssigned(true)
+      showToast('队长已自动就位！', 'success')
     }
 
-    // 加载当前玩家的偏好
-    const current = roomPlayers.find(p => p.player_id === currentPlayer.id)
+    assignCaptainsToTeams()
+  }, [roomPlayers, roomId, selectPlayer, captainsAssigned, showToast])
+
+  // 加载当前玩家的偏好
+  useEffect(() => {
+    const current = roomPlayers.find(p => p.player_id === currentPlayer?.id)
     if (current?.preferred_team) {
       setSelectedTeam(current.preferred_team)
     }
-  }, [currentRoom, currentPlayer, roomPlayers, roomId, navigate])
+  }, [roomPlayers, currentPlayer])
 
   const handleSelectPlayer = async (playerId, team) => {
     const success = await selectPlayer(roomId, playerId, team)
@@ -260,7 +326,7 @@ export function DraftPage() {
             </div>
           )}
 
-          {isCaptain && (
+          {isCaptain && availablePlayers.length > 0 && (
             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-center">
               <p className="text-blue-700 font-medium">
                 点击队员卡片将其加入你的队伍
