@@ -10,7 +10,6 @@ import { GamePage } from './pages/GamePage';
 import { StatsPage } from './pages/StatsPage';
 import { PlayerStatsPage } from './pages/PlayerStatsPage';
 import { Loader2 } from 'lucide-react';
-import { TestRoomPage } from './pages/TestRoomPage';
 import { AdminPlayersPage } from './pages/AdminPlayersPage';
 import { TestImagePage } from './pages/TestImagePage';
 
